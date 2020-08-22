@@ -256,7 +256,7 @@ void *handleClient(void *vPtr)
 
                 if ((outFd < 0) || (errFd < 0))
                 {
-                    fprintf(stderr, "Could not open one or more files\n");
+                    write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
                     exit(EXIT_FAILURE);
                 }
 
