@@ -59,11 +59,24 @@ void *handleClient(void *vPtr)
     char buffer[BUFFER_LEN];
     char command;
     int shouldContinue = 1;
+    // to dynamically get cwd
     char cwd[MAX_FILE_NUM];
-    char *file_list[BUFFER_LEN];
+    // file buffer 
+    char file_list[BUFFER_LEN];
+    // file name 
+    char *file ;
     DIR *folder_to_read;
     struct dirent *dir;
     
+    //Write_CMD_Char
+    char output_file[BUFFER_LEN];
+    //number for file 
+    int fileNum;
+    // text for file
+    char text[BUFFER_LEN];
+    // Client Folder 
+    int client_folder;
+
     while (shouldContinue)
     {
         read(fd, buffer, BUFFER_LEN);
@@ -75,55 +88,68 @@ void *handleClient(void *vPtr)
 
 
     case QUIT_CMD_CHAR:
+      printf("Thread %d quitting.\n", threadNum);
       write(fd, STD_BYE_MSG, sizeof(STD_BYE_MSG));
       shouldContinue = 0;
       return 0;
     case DIR_CMD_CHAR:
-    
     // creating a buffer for a file 
     // instead of making this hardcoded we made it dynamic this way this code can work with any directory 
-
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
-            //  write(fd, "Listing Out Current Working Directory", sizeof("Listing Out Current Working Directory"));
-            //  write(fd, cwd, sizeof(cwd));
-          
-             folder_to_read = opendir(".");      
-
+             folder_to_read = opendir(cwd);      
              if(folder_to_read){
-                 int counter = 0;
                    //  II.A.  Create awk process and have it run awk:
-               
                  while((dir = readdir(folder_to_read)) != NULL){
-                    //  write(fd, "HERE", sizeof("HERE"));
-                    //   file_list[counter]=malloc(BUFFER_LEN*sizeof(dir->d_name)); 
-                    //   file_list[counter] = dir->d_name;
-                    //   counter++;
-                    //write(fd, dir->d_name, sizeof(dir->d_name));
-                    strcpy(file_list,dir->d_name);
-                     
+                      file = dir->d_name;    
+                      strncat(file_list,file,BUFFER_LEN);
+                      strncat(file_list,"\n",BUFFER_LEN);      
                  }
-                    // write(fd, dir->d_name, sizeof(dir->d_name));
-                     write(fd, file_list, sizeof(file_list));
-                
-                    break;
+                 write(fd, file_list, sizeof(file_list));
+                 break;
 
              }   
              
-            //  printf("Current working dir: %s\n", cwd);
         } 
         else {
             // if not able to get the working folder send message 
             write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+            break;
+        }
         break;
-   }
-   break;
+    case WRITE_CMD_CHAR:
+        snprintf(output_file, BUFFER_LEN, "%d%s", fileNum, FILENAME_EXTENSION);
+        int file_number_written;
+        int fileFd = open(output_file, O_WRONLY | O_CREAT, 0660);
+        file_number_written = write(fileFd, &text, BUFFER_LEN);
+        
+        if (file_number_written == -1 && fileFd == -1)
+        {
+            write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+            break;
 
+        }
+        close(fileFd);
+        write(fd, "Success", sizeof("Success"));
+        break;
+    case READ_CMD_CHAR:
+        snprintf(output_file, BUFFER_LEN, "%d%s", fileNum, FILENAME_EXTENSION);
+        int read_fileFd = open(output_file, O_RDONLY, 0440); 
+
+        if (read_fileFd == -1)
+        {
+            write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+        }
+
+        read(read_fileFd, buffer, BUFFER_LEN);
+        strcat(buffer, "\0");
+        write(fd, buffer, sizeof(buffer));
+        close(fileFd);
 
     default:
       if (isdigit(command))
       {
           write(fd, "Bless you", sizeof("Bless you"));
-        //sendColumn(fd, command - '0');
+        
       }
     }
     }
