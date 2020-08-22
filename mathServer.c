@@ -71,17 +71,30 @@ void *handleClient(void *vPtr)
     //Write_CMD_Char
     char output_file[BUFFER_LEN];
     //number for file 
-    int fileNum;
+    char fileNum;
     // text for file
     char text[BUFFER_LEN];
     // Client Folder 
     int client_folder;
+
+    // reading file char 
+    char input_file[BUFFER_LEN];
+    char read_buffer[BUFFER_LEN];
+
+
+
+    //delete file 
+    char delete_file[BUFFER_LEN];
 
     while (shouldContinue)
     {
         read(fd, buffer, BUFFER_LEN);
         printf("Thread %d received: %s\n", threadNum, buffer);
         command = buffer[0];
+        fileNum = buffer[2];
+        // printf("command: %c",command);
+
+       
 
     switch (command)
     {
@@ -105,6 +118,7 @@ void *handleClient(void *vPtr)
                       strncat(file_list,"\n",BUFFER_LEN);      
                  }
                  write(fd, file_list, sizeof(file_list));
+        
                  break;
 
              }   
@@ -113,11 +127,13 @@ void *handleClient(void *vPtr)
         else {
             // if not able to get the working folder send message 
             write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+           
             break;
         }
+   
         break;
     case WRITE_CMD_CHAR:
-        snprintf(output_file, BUFFER_LEN, "%d%s", fileNum, FILENAME_EXTENSION);
+        snprintf(output_file, BUFFER_LEN, "%c%s", fileNum, FILENAME_EXTENSION);
         int file_number_written;
         int fileFd = open(output_file, O_WRONLY | O_CREAT, 0660);
         file_number_written = write(fileFd, &text, BUFFER_LEN);
@@ -125,25 +141,40 @@ void *handleClient(void *vPtr)
         if (file_number_written == -1 && fileFd == -1)
         {
             write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+          
             break;
 
         }
         close(fileFd);
         write(fd, "Success", sizeof("Success"));
+     
         break;
     case READ_CMD_CHAR:
-        snprintf(output_file, BUFFER_LEN, "%d%s", fileNum, FILENAME_EXTENSION);
-        int read_fileFd = open(output_file, O_RDONLY, 0440); 
+        printf("Hello '\n' ");
+        snprintf(input_file, BUFFER_LEN, "%c%s", fileNum, FILENAME_EXTENSION);
+        
+        printf("input_file  %s",input_file);
+        
+        int read_fileFd = open(input_file, O_RDONLY, 0440); 
 
         if (read_fileFd == -1)
         {
             write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+            break;
         }
 
-        read(read_fileFd, buffer, BUFFER_LEN);
-        strcat(buffer, "\0");
-        write(fd, buffer, sizeof(buffer));
-        close(fileFd);
+        read(read_fileFd, read_buffer, BUFFER_LEN);
+        strcat(read_buffer, "\0");
+        write(fd, read_buffer, sizeof(read_buffer));
+        close(read_fileFd);
+    
+        break;
+    case DELETE_CMD_CHAR:
+        snprintf(delete_file, BUFFER_LEN, "%c%s", fileNum, FILENAME_EXTENSION);
+        if (remove(delete_file) == 0){ 
+        printf("Deleted successfully"); 
+        write(fd, "Deleted successfully", sizeof("Deleted successfully"));
+        }
 
     default:
       if (isdigit(command))
