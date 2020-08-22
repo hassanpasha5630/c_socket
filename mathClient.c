@@ -223,7 +223,7 @@ void communicateWithServer(int fd)
         write(fd, buffer, strlen(buffer) + 1);
         read(fd, buffer, BUFFER_LEN);
 
-        printf("%s\n", buffer);
+        printf("client buffer : %s\n", buffer);
     }
 
     //  III.  Finished:

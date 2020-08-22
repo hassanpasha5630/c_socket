@@ -86,13 +86,20 @@ void *handleClient(void *vPtr)
     //delete file 
     char delete_file[BUFFER_LEN];
 
+    //calculation 
+    int calcPid = fork();
+
+
     while (shouldContinue)
-    {
+    {   printf("starting.\n");
         read(fd, buffer, BUFFER_LEN);
+        
         printf("Thread %d received: %s\n", threadNum, buffer);
         command = buffer[0];
         fileNum = buffer[2];
-        // printf("command: %c",command);
+        
+      
+
 
        
 
@@ -111,7 +118,6 @@ void *handleClient(void *vPtr)
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
              folder_to_read = opendir(cwd);      
              if(folder_to_read){
-                   //  II.A.  Create awk process and have it run awk:
                  while((dir = readdir(folder_to_read)) != NULL){
                       file = dir->d_name;    
                       strncat(file_list,file,BUFFER_LEN);
@@ -136,7 +142,18 @@ void *handleClient(void *vPtr)
         snprintf(output_file, BUFFER_LEN, "%c%s", fileNum, FILENAME_EXTENSION);
         int file_number_written;
         int fileFd = open(output_file, O_WRONLY | O_CREAT, 0660);
-        file_number_written = write(fileFd, &text, BUFFER_LEN);
+        
+        for(int count = 5; count < sizeof(buffer) ; count++){
+            // strcat(text, "\0");
+            char c = buffer[count];
+            strncat(text,&c,BUFFER_LEN);
+            
+        }
+        
+        // printf("text = %s \n",text);
+        //memcpy(text, buffer, sizeof(buffer));
+
+        file_number_written = write(fileFd, text, sizeof(text));
         
         if (file_number_written == -1 && fileFd == -1)
         {
@@ -146,17 +163,18 @@ void *handleClient(void *vPtr)
 
         }
         close(fileFd);
-        write(fd, "Success", sizeof("Success"));
+        write(fd, text, sizeof(text));
+        //write(fd, "Success", sizeof("Success"));
      
         break;
     case READ_CMD_CHAR:
         printf("Hello '\n' ");
         snprintf(input_file, BUFFER_LEN, "%c%s", fileNum, FILENAME_EXTENSION);
         
-        printf("input_file  %s",input_file);
+        printf("input_file  %s \n",input_file);
         
-        int read_fileFd = open(input_file, O_RDONLY, 0440); 
-
+        int read_fileFd = open(input_file, O_RDONLY); 
+        printf("read_fileFd %d \n",read_fileFd);
         if (read_fileFd == -1)
         {
             write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
@@ -165,6 +183,7 @@ void *handleClient(void *vPtr)
 
         read(read_fileFd, read_buffer, BUFFER_LEN);
         strcat(read_buffer, "\0");
+        printf("buffer %s",read_buffer);
         write(fd, read_buffer, sizeof(read_buffer));
         close(read_fileFd);
     
@@ -175,6 +194,82 @@ void *handleClient(void *vPtr)
         printf("Deleted successfully"); 
         write(fd, "Deleted successfully", sizeof("Deleted successfully"));
         }
+
+    case CALC_CMD_CHAR:
+        /* Create new fork named calcPid: */
+        
+
+        /* If fork() failed: */
+        if (calcPid < 0)
+        {
+            write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+        }
+        /* Child writes files: */
+        else if (calcPid == 0)
+        {
+            char fileName[BUFFER_LEN];
+
+            snprintf(fileName, BUFFER_LEN, "%d%s", fileNum, FILENAME_EXTENSION);
+
+            int inFd = open(fileName, O_RDONLY, 0);
+            int outFd = open(OUTPUT_FILENAME, O_WRONLY | O_CREAT | O_TRUNC, 0660);
+            int errFd = open(ERROR_FILENAME, O_WRONLY | O_CREAT | O_TRUNC, 0660);
+
+            if ((inFd < 0) || (outFd < 0) || (errFd < 0))
+            {
+                fprintf(stderr, "Could not open one or more files\n");
+                exit(EXIT_FAILURE);
+            }
+
+            close(0);
+            dup(inFd);
+            close(1);
+            dup(outFd);
+            close(2);
+            dup(errFd);
+
+            /* Run CALC_PROGNAME, if fails generate output: */
+            execl(CALC_PROGNAME, CALC_PROGNAME, fileName, NULL);
+            fprintf(stderr, "Could not execl %s\n", CALC_PROGNAME);
+            exit(EXIT_FAILURE);
+        }
+        /* Parent reads files: */
+        else
+        {
+            /* Wait and check status of child process, if it crashes return STD_ERROR_MSG: */
+            int status;
+            pid_t return_pid = waitpid(calcPid, &status, WNOHANG);
+
+            if (return_pid == -1)
+                write(fd, STD_ERROR_MSG, sizeof(STD_ERROR_MSG));
+
+            /* If child process EXIT_SUCCESS, then run parent process: */
+            if (return_pid == calcPid)
+            {
+                char fileName[BUFFER_LEN];
+
+                snprintf(fileName, BUFFER_LEN, "%d%s", fileNum, FILENAME_EXTENSION);
+                int numBytes = 0;
+
+                int outFd = open(OUTPUT_FILENAME, O_RDONLY | O_CREAT, 0660);
+                int errFd = open(ERROR_FILENAME, O_RDONLY | O_CREAT, 0660);
+
+                if ((outFd < 0) || (errFd < 0))
+                {
+                    fprintf(stderr, "Could not open one or more files\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                while ((numBytes = read(outFd, fileName, BUFFER_LEN)) > 0)
+                    read(errFd, &fileName[numBytes], BUFFER_LEN);
+
+                close(0);
+                dup(outFd);
+                close(1);
+                dup(errFd);
+            }
+        }
+    
 
     default:
       if (isdigit(command))
@@ -188,8 +283,9 @@ void *handleClient(void *vPtr)
     //  III.  Finished:
     printf("Thread %d quitting.\n", threadNum);
     return (NULL);
+    
+    
 }
-
 //---		Definition of functions:				---//
 
 //  PURPOSE:  To run the server by 'accept()'-ing client requests from
